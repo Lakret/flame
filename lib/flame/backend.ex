@@ -67,7 +67,7 @@ defmodule FLAME.Backend do
   out. Remote backends should terminate the runner host or application, such as
   by calling `System.stop/0`. Local or test backends may no-op.
   """
-  @callback system_shutdown() :: term()
+  @callback system_shutdown() :: no_return()
 
   @doc """
   Boots the runner and waits for its terminator to connect.
@@ -93,7 +93,7 @@ defmodule FLAME.Backend do
   need to track. Return `{:noreply, new_state}` with the updated backend state.
   """
   @callback handle_info(msg :: term, state :: term) ::
-              {:noreply, new_state :: term}
+              {:noreply, new_state :: term} | {:stop, term, new_state :: term}
 
   @optional_callbacks handle_info: 2
 

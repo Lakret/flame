@@ -31,12 +31,67 @@ defmodule FLAME.Backend do
 
   See `FLAME.FlyBackend` for an example implementation of this behavior.
   """
+  @doc """
+  Initializes backend state for one `FLAME.Runner`.
+
+  `opts` are the pool/backend options after FLAME has merged the backend
+  configuration for the pool. Implementations should validate the options they
+  support, prepare any values needed to boot a runner, and usually generate the
+  parent reference encoded into `FLAME_PARENT`.
+
+  Return `{:ok, state}` with the backend state passed to the other callbacks, or
+  `{:error, reason}` to fail runner startup.
+  """
   @callback init(opts :: Keyword.t()) :: {:ok, state :: term()} | {:error, term()}
+
+  @doc """
+  Spawns work on the booted runner and monitors it.
+
+  `func` is either a zero-arity function or an MFA tuple in the form
+  `{module, function, args}`. The function or MFA must run in the environment
+  represented by `state`, typically the remote node that connected during
+  `remote_boot/1`.
+
+  Return `{:ok, {pid, ref}}`, where `pid` is the spawned process and `ref` is a
+  monitor reference that will produce a normal `:DOWN` message. Raise or return
+  `{:error, reason}` when the term cannot be spawned by the backend.
+  """
   @callback remote_spawn_monitor(state :: term, func :: function() | term) ::
               {:ok, {pid, reference()}} | {:error, reason :: term}
+
+  @doc """
+  Stops the current runner system.
+
+  This callback is invoked from inside the runner by `FLAME.Terminator` when the
+  parent asks the runner to shut down, the parent goes away, or the runner idles
+  out. Remote backends should terminate the runner host or application, such as
+  by calling `System.stop/0`. Local or test backends may no-op.
+  """
   @callback system_shutdown() :: no_return()
+
+  @doc """
+  Boots the runner and waits for its terminator to connect.
+
+  Implementations should provision or start the compute resource, make the
+  encoded `FLAME_PARENT` available to it, and ensure `FLAME.Terminator` starts in
+  the runner application. The terminator connects back to the parent node and
+  sends `{ref, {:remote_up, remote_terminator_pid}}`, where `ref` is the parent
+  reference encoded in `FLAME_PARENT`.
+
+  Return `{:ok, remote_terminator_pid, new_state}` once the terminator is ready.
+  The runner will monitor that pid and use `new_state` for future callback calls.
+  Return `{:error, reason}` if the runner cannot be booted.
+  """
   @callback remote_boot(state :: term) ::
               {:ok, remote_terminator_pid :: pid(), new_state :: term} | {:error, term}
+
+  @doc """
+  Handles backend-specific messages delivered to the runner process.
+
+  This optional callback receives messages that `FLAME.Runner` does not handle
+  itself, including monitor messages or provider notifications a backend may
+  need to track. Return `{:noreply, new_state}` with the updated backend state.
+  """
   @callback handle_info(msg :: term, state :: term) ::
               {:noreply, new_state :: term} | {:stop, term, new_state :: term}
 
